@@ -41,7 +41,7 @@ float pingDistanceCM = 0.0; //ping sensor var
 float gyroZbias = 0.8; //degrees per second
 
 //gps vars. Default all to 0
-float DEF = 28;
+float DEF = 0;
 float gpsLat = DEF;
 float gpsLon = DEF;
 float gpsV = DEF;
@@ -103,18 +103,8 @@ void loop() {
   unsigned long time = millis(); //keep track of how long its been since the loop started. want to loop every 20 milliseconds
 
   static float estHeading = desHeading;
-  float* estHeadAddr = &estHeading;
-  
-  //For use with auto additude problem
-//  static float ce = cos(DegToRad(estHeading));
-//  static float se = sin(DegToRad(estHeading));
-//  static float cd = cos(DegToRad(estHeading));
-//  static float sd = sin(DegToRad(estHeading));
-//  float* ceAddr = &ce;
-//  float* seAddr = &se;
-  //Serial.println(ce);
-  //Serial.println(se);
-  //Serial.println();
+  float* estHeadAddr = &estHeading; //maintain an address to the heading angle so we don't need to make a global variable
+ 
   
   setSpeed(); //set the wheel speed
   updateGPSData(); //updates our GPS data for
@@ -136,36 +126,31 @@ void loop() {
 // Adjust wheels to set self to correct heading
 ////////////////////////////////////////////////////////////
 float correctHeading(float desHeading, float* estHeadingAddr) {
+
+  //gyro readings
   lsm.read();  /* ask it to read in the data */
   sensors_event_t a, m, g, temp; //a = linear acceleration , m = magnetometer reading, g = gyro acceleration
   lsm.getEvent(&a, &m, &g, &temp);
   static int count = 0;
-  float estHeading = *estHeadingAddr;
 
+  
+  float estHeading = *estHeadingAddr; //for computation
   float tau = 1;
   float deltaTms = 20*0.001; //dt
   float headingK = 0.5; //constant in controller
 
   
-
-//DEPRECATED
-
-//  *estHeadingAddr -=(g.gyro.z-gyroZbias)*deltaTms; //integrate
-//  float servoAngleDeg = SERVOANGLENEUT + headingK *(desHeading - estHeading);
-//  steeringServo.write(constrain(servoAngleDeg, SERVOANGLENEUT-25, SERVOANGLENEUT+25));
-//
-
-
   float angleDiff = (gpsPsi- estHeading);
-  float delta = (deltaTms)*(1/tau * angleDiff + (g.gyro.z-gyroZbias));
-  //Serial.println(angleDiff);
-  //Serial.println(g.gyro.z-gyroZbias);
+  float deltaAng = (deltaTms)*(1/tau * angleDiff + (g.gyro.z-gyroZbias));
+
   
-  *estHeadingAddr += (deltaTms)*(1/tau * angleDiff + (g.gyro.z-gyroZbias));  
-  *estHeadingAddr = wrapAngle360(*estHeadingAddr);
+  *estHeadingAddr += deltaAng;  
+  *estHeadingAddr = wrapAngle360(*estHeadingAddr); //prevent large jumps across 0
 
   float servoAngleDeg = SERVOANGLENEUT - headingK * (desHeading - *estHeadingAddr);
    steeringServo.write(constrain(servoAngleDeg, SERVOANGLENEUT-15, SERVOANGLENEUT+15));
+
+   //every half second print important info to serial montior
    if(count >= 25) {
    Serial.print("Estimated Heading: "); Serial.println(*estHeadingAddr);
    Serial.print("Desired Heading: "); Serial.println(desHeading);
@@ -175,11 +160,6 @@ float correctHeading(float desHeading, float* estHeadingAddr) {
    count = 0;
    }
    
-//  //Serial.print("Heading Angle Update: "); Serial.println( (1/tau * angleDiff + (g.gyro.z-gyroZbias)));
-//  //Serial.println();
-//  //Serial.println(servoAngleDeg);
-//  //Serial.println(desHeading - estHeading);
-//  //Serial.println();
 
   count++;
   return estHeading;
@@ -284,7 +264,7 @@ float wrapAngle360(float angle){
 }
 
 ////////////////////////////////////////////////////////////
-// Wrap angles around so that 0 = 360
+// Wrap angles around so that -180 = 180
 ////////////////////////////////////////////////////////////
 float wrapAngle180(float angle){
   while (angle < -180) { //while the sum of the degrees is less than 0 keep adding 360 so that we land between 0 and 360
@@ -421,39 +401,4 @@ float DegToRad(float angle) {
 
 float RadToDeg(float angle) {
   return angle*180.0/PI;
-}
-
-///THIS IS LINEAR SO JUST ENDS UP DIVERGING DO NOT USE
-void correctHeading(float cd, float sd, float* ceAddr, float* seAddr) {
-  lsm.read();  /* ask it to read in the data */
-  sensors_event_t a, m, g, temp; //a = linear acceleration , m = magnetometer reading, g = gyro acceleration
-  lsm.getEvent(&a, &m, &g, &temp);
-  float cg = cos(DegToRad(gpsPsi));
-  float sg = sin(DegToRad(gpsPsi));
-
-  float tau = 5;
-  float deltaTms = 20*0.001; //dt
-  float K = 1.5; //constant in controller
-  float r = g.gyro.z;
-
-  float ce = *ceAddr;
-  float se = *seAddr;
-  float d1 = deltaTms*(-r * se); //+ 1/tau*(cg-ce));
-  float d2 = deltaTms*(r * ce); //+ 1/tau*(sg-se));
-  Serial.println(ce);
-  Serial.println(se);
-  *ceAddr += deltaTms*(-r*se+1/tau*(cg-ce));
-  *seAddr += deltaTms*(r*ce + 1/tau*(sg-se));
-  //Serial.println(-r*se);
-  //Serial.println(1/tau*(cg-ce));
-  //Serial.println((cg-ce));
-  //Serial.println(se);
-  //Serial.println(r*ce);
-  //Serial.println(1/tau);
-
-  float delta = K * constrain((sd*(ce)-(se)*cd), -1/2, 1/2);
-
-  float servoAngleDeg = SERVOANGLENEUT + delta;
-  //Serial.println(servoAngleDeg);
-  steeringServo.write(constrain(servoAngleDeg, SERVOANGLENEUT-25, SERVOANGLENEUT+25)); 
 }
