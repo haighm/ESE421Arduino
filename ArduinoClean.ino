@@ -1,4 +1,3 @@
-
 #include <Servo.h>
 #include <Adafruit_LSM9DS1.h>
 #include <Adafruit_Sensor.h>
@@ -39,6 +38,7 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1(LSM9DS1_XGCS, LSM9DS1_MCS);
 float SERVOANGLENEUT = 98; //set this to the neutral point of the servo
 float pingDistanceCM = 0.0; //ping sensor var
 float gyroZbias = 0.8; //degrees per second
+byte piCommand = 1;
 
 //gps vars. Default all to 0
 float DEF = 0;
@@ -283,8 +283,8 @@ float wrapAngle180(float angle){
 void receiveData(int byteCount) {
   while(Wire.available()){
     
-    int val = Wire.read();
-    //Serial.print(val);
+    int heading_desired = Wire.read();
+    int current_speed = Wire.read();
     //will want to publish a desired heading
     
   }
@@ -294,7 +294,17 @@ void receiveData(int byteCount) {
 // Send Data back to Raspberry Pi
 ////////////////////////////////////////////////////////////
 void sendData() {
-  
+    float dataBuffer[10];
+    byte *b;
+        dataBuffer[0] = gpsLat;
+        dataBuffer[1] = gpsLon;
+        dataBuffer[2] = gpsV;   
+        dataBuffer[3] = gpsPsi;
+        dataBuffer[4] = gpsNSat;
+        byteArray[0] = (float)((dataBuffer[piCommand] >> 24) & 0xFF) ;
+        byteArray[1] = (float)((dataBuffer[piCommand] >> 16) & 0xFF) ;
+        byteArray[2] = (float)((dataBuffer[piCommand] >> 8) & 0XFF);
+        byteArray[3] = (float)((dataBuffer[piCommand] & 0XFF));
 }
 
 
